@@ -1,0 +1,181 @@
+:root {
+  --bg: #0e0f13;
+  --panel: #171922;
+  --text: #e6e6e6;
+  --muted: #a8adba;
+  --primary: #3b82f6;
+  --border: #252834;
+  --green: #22c55e;
+  --red: #ef4444;
+  --grey: #6b7280;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+.app-header, .app-footer {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #10121a;
+}
+.app-footer { border-top: 1px solid var(--border); border-bottom: none; color: var(--muted); }
+.app-header h1 { margin: 0 0 6px; font-size: 20px; }
+.totals { color: var(--muted); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 16px;
+  height: calc(100vh - 120px);
+  padding: 16px;
+}
+
+.left, .right {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+label { color: var(--muted); }
+select, button {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #0f1117;
+  color: var(--text);
+}
+select { padding: 0 10px; }
+button { padding: 0 12px; cursor: pointer; }
+button.primary { background: var(--primary); border-color: #2a5fc0; }
+button.ghost { background: transparent; color: var(--muted); }
+button:hover { filter: brightness(1.06); }
+
+.legend { display: flex; gap: 12px; padding: 10px 12px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+.dot.green { background: var(--green); }
+.dot.red { background: var(--red); }
+.dot.grey { background: var(--grey); }
+
+.list { height: calc(100% - 140px); overflow: auto; }
+table { width: 100%; border-collapse: collapse; }
+thead { position: sticky; top: 0; background: #141722; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th.num, td.num { text-align: right; }
+td button.small { height: 28px; padding: 0 8px; }
+
+.map-wrap { height: 100%; width: 100%; display: grid; place-items: center; background: #111319; }
+#worldMapSvg { width: 100%; height: 100%; border: none; }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #0a0b0f;
+  background: #d1f7e0;
+}
+
+.tag-muted { color: var(--muted); font-size: 12px; }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .left { order: 2; }
+  .right { order: 1; height: 50vh; }
+  .controls { flex-wrap: wrap; }
+  select, button { flex: 1 1 auto; }
+  .list { height: auto; max-height: 50vh; }
+}
+
+@media (max-width: 480px) {
+  .app-header h1 { font-size: 18px; }
+  button, select { height: 42px; }
+  td button.small { height: 34px; }
+}
+
+
+/* Стили для экрана аутентификации */
+.auth-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.auth-container {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 30px;
+  text-align: center;
+  max-width: 300px;
+  width: 90%;
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.auth-btn.user {
+  background: var(--primary);
+  border-color: #2a5fc0;
+}
+
+.auth-btn.admin {
+  background: #f59e0b;
+  border-color: #d97706;
+}
+
+.auth-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-notice {
+  color: #f43f5e;
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+/* Скрываем основной контент до авторизации */
+body:not(.authenticated) .app-header,
+body:not(.authenticated) .layout {
+  display: none;
+}
+
+/* Показываем кнопку сброса только админу */
+body:not(.admin) #resetBtn {
+  display: none;
+}

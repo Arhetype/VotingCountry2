@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Вход в голосовалку</title>
+    <style>
+        :root {
+            --bg: #0e0f13;
+            --panel: #171922;
+            --text: #e6e6e6;
+            --muted: #a8adba;
+            --primary: #3b82f6;
+            --border: #252834;
+            --green: #22c55e;
+            --red: #ef4444;
+            --grey: #6b7280;
+        }
+
+        * { box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        }
+
+        .auth-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .auth-container {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .auth-container h2 {
+            margin: 0 0 20px;
+            font-size: 24px;
+        }
+
+        .auth-btn {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+
+        .auth-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .auth-btn.user {
+            background: var(--primary);
+            border-color: #2a5fc0;
+        }
+
+        .auth-btn.admin {
+            background: #f59e0b;
+            border-color: #d97706;
+        }
+
+        .auth-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auth-notice {
+            color: #f43f5e;
+            margin-top: 15px;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #f43f5e;
+            border-radius: 5px;
+            background: rgba(244, 63, 94, 0.1);
+        }
+
+        .auth-info {
+            color: var(--muted);
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-screen">
+        <div class="auth-container">
+            <h2>🌍 Голосовалка по странам</h2>
+            <button id="userLogin" class="auth-btn user">Войти как пользователь</button>
+            <div id="adminSection" style="display: none;">
+                <input type="password" id="adminCode" placeholder="Введите секретный код" style="width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px;">
+                <button id="adminLogin" class="auth-btn admin">Войти как администратор</button>
+            </div>
+            <button id="showAdminBtn" class="auth-btn" style="background: transparent; border: 1px dashed var(--border);">Войти как администратор</button>
+            <div class="auth-notice" id="errorNotice" style="display: none;"></div>
+            <div class="auth-info">
+                <strong>Пользователь:</strong> может выбрать каждую страну только один раз<br>
+                <strong>Администратор:</strong> может сбрасывать голоса (требуется секретный код)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_KEY = "admin_active";
+        const ADMIN_SECRET_CODE = "admin_active"; // Захардкоженный секретный код
+
+        function isAdminActive() {
+            return localStorage.getItem(ADMIN_KEY) === "true";
+        }
+
+        function setAdminActive(active) {
+            if (active) {
+                localStorage.setItem(ADMIN_KEY, "true");
+            } else {
+                localStorage.removeItem(ADMIN_KEY);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const userLogin = document.getElementById("userLogin");
+            const adminLogin = document.getElementById("adminLogin");
+            const showAdminBtn = document.getElementById("showAdminBtn");
+            const adminSection = document.getElementById("adminSection");
+            const adminCode = document.getElementById("adminCode");
+            const errorNotice = document.getElementById("errorNotice");
+
+            // Показываем поле для ввода кода при нажатии на кнопку
+            showAdminBtn.addEventListener("click", function() {
+                adminSection.style.display = "block";
+                showAdminBtn.style.display = "none";
+            });
+
+            userLogin.addEventListener("click", function() {
+                window.location.href = "index.html?role=user";
+            });
+
+            adminLogin.addEventListener("click", function() {
+                const code = adminCode.value.trim();
+                if (code !== ADMIN_SECRET_CODE) {
+                    errorNotice.textContent = "❌ Неверный секретный код";
+                    errorNotice.style.display = "block";
+                    return;
+                }
+                
+                setAdminActive(true);
+                window.location.href = "index.html?role=admin";
+            });
+
+            // Enter в поле кода
+            adminCode.addEventListener("keypress", function(e) {
+                if (e.key === "Enter") {
+                    adminLogin.click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

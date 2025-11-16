@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520">
+  <defs>
+    <style>
+      .land { fill:#374151; stroke:#0b0d13; stroke-width:0.6; }
+      .ocean { fill:#0f1117; }
+    </style>
+  </defs>
+
+  <rect class="ocean" x="0" y="0" width="1000" height="520" />
+
+  <!-- Simplified rough shapes for a few countries. IDs are ISO A3 codes -->
+  <!-- USA -->
+  <path id="USA" class="land" d="M100,160 L220,140 L320,150 L350,170 L360,200 L320,220 L250,210 L180,200 L120,180 Z"/>
+
+  <!-- RUS (very rough, oversized for visibility) -->
+  <path id="RUS" class="land" d="M520,60 L720,50 L860,70 L900,110 L880,140 L820,130 L760,120 L700,130 L640,120 L560,100 Z"/>
+
+  <!-- CHN -->
+  <path id="CHN" class="land" d="M680,190 L740,180 L800,200 L820,230 L790,250 L740,240 L700,230 L670,210 Z"/>
+
+  <!-- IND -->
+  <path id="IND" class="land" d="M690,260 L720,270 L710,300 L680,290 L675,270 Z"/>
+
+  <!-- BRA -->
+  <path id="BRA" class="land" d="M350,300 L390,290 L450,320 L460,360 L420,380 L380,360 L340,340 Z"/>
+
+  <!-- DEU -->
+  <path id="DEU" class="land" d="M530,180 L550,178 L560,190 L550,202 L532,198 Z"/>
+
+  <!-- FRA -->
+  <path id="FRA" class="land" d="M510,190 L528,188 L535,200 L522,210 L505,202 Z"/>
+
+  <!-- GBR -->
+  <path id="GBR" class="land" d="M498,170 L505,165 L510,172 L506,180 L498,178 Z"/>
+
+</svg>
+
+
