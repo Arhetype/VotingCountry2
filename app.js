@@ -24,7 +24,9 @@ const COUNTRIES = [
 const STORAGE_KEY = "country_votes_v3";
 const ADMIN_KEY = "admin_active";
 const USER_VOTED_COUNTRIES_KEY = "user_voted_countries"; // Массив кодов стран, за которые пользователь уже проголосовал
+const LAST_RESET_TIMESTAMP_KEY = "last_reset_timestamp"; // Timestamp последнего сброса
 let firebaseApi = null;
+let tableSortOrder = { column: null, ascending: true }; // Состояние сортировки таблицы
 
 // ISO A3 -> ISO A2 fallback map
 const ISO_A3_TO_A2 = {
@@ -107,16 +109,118 @@ function renderSelect() {
   });
 }
 
+function setupTableSorting() {
+  const thead = document.querySelector('table thead');
+  if (!thead) return;
+  
+  // Проверяем, не настроена ли уже сортировка
+  if (thead.dataset.sortingSetup === 'true') {
+    updateSortIndicators();
+    return;
+  }
+  
+  const headers = thead.querySelectorAll('th');
+  headers.forEach((th, index) => {
+    let text = th.textContent.trim().replace(/[↑↓]/g, '').trim();
+    if (text === '%' || text === 'Голоса' || text === 'Страна') {
+      th.style.cursor = 'pointer';
+      th.style.userSelect = 'none';
+      th.title = 'Нажмите для сортировки';
+      
+      // Добавляем индикатор сортировки
+      const indicator = document.createElement('span');
+      indicator.className = 'sort-indicator';
+      indicator.style.marginLeft = '5px';
+      indicator.style.opacity = '0.5';
+      th.appendChild(indicator);
+      
+      th.addEventListener('click', () => {
+        let column = null;
+        if (text === '%') column = 'percent';
+        else if (text === 'Голоса') column = 'votes';
+        else if (text === 'Страна') column = 'name';
+        
+        if (column) {
+          // Переключаем порядок сортировки, если кликнули по той же колонке
+          if (tableSortOrder.column === column) {
+            tableSortOrder.ascending = !tableSortOrder.ascending;
+          } else {
+            tableSortOrder.column = column;
+            tableSortOrder.ascending = true;
+          }
+          
+          updateSortIndicators();
+          
+          // Перерисовываем таблицу
+          const votes = readVotes();
+          const isAdmin = isAdminActive();
+          renderTable(votes, isAdmin);
+        }
+      });
+    }
+  });
+  
+  thead.dataset.sortingSetup = 'true';
+  updateSortIndicators();
+}
+
+function updateSortIndicators() {
+  const headers = document.querySelectorAll('table thead th');
+  headers.forEach((th, index) => {
+    const indicator = th.querySelector('.sort-indicator');
+    if (indicator) {
+      const text = th.textContent.trim().replace(/[↑↓]/g, '').trim();
+      let column = null;
+      if (text === '%') column = 'percent';
+      else if (text === 'Голоса') column = 'votes';
+      else if (text === 'Страна') column = 'name';
+      
+      if (column && tableSortOrder.column === column) {
+        indicator.textContent = tableSortOrder.ascending ? '↑' : '↓';
+        indicator.style.opacity = '1';
+      } else {
+        indicator.textContent = '';
+        indicator.style.opacity = '0.5';
+      }
+    }
+  });
+}
+
 function renderTable(votes, isAdmin = false) {
   const tbody = document.getElementById("countriesTableBody");
   tbody.innerHTML = "";
   const { total, max, minPositive } = computeStats(votes);
   document.getElementById("totalVotes").textContent = `Всего голосов: ${total}`;
 
-  COUNTRIES.forEach(c => {
-    const tr = document.createElement("tr");
+  // Подготавливаем данные для сортировки
+  const countriesData = COUNTRIES.map(c => {
     const v = votes[c.code] || 0;
     const pct = percent(v, total);
+    return { ...c, votes: v, percent: pct };
+  });
+
+  // Сортировка
+  if (tableSortOrder.column === 'percent') {
+    countriesData.sort((a, b) => {
+      const diff = a.percent - b.percent;
+      return tableSortOrder.ascending ? diff : -diff;
+    });
+  } else if (tableSortOrder.column === 'votes') {
+    countriesData.sort((a, b) => {
+      const diff = a.votes - b.votes;
+      return tableSortOrder.ascending ? diff : -diff;
+    });
+  } else if (tableSortOrder.column === 'name') {
+    countriesData.sort((a, b) => {
+      const diff = a.name.localeCompare(b.name);
+      return tableSortOrder.ascending ? diff : -diff;
+    });
+  }
+
+  countriesData.forEach(c => {
+    const tr = document.createElement("tr");
+    const v = c.votes;
+    const pct = c.percent;
 
     const tdName = document.createElement("td");
     tdName.textContent = c.name;
@@ -176,6 +280,9 @@ function renderTable(votes, isAdmin = false) {
     tr.appendChild(tdBtn);
     tbody.appendChild(tr);
   });
+  
+  // Обновляем индикаторы сортировки после рендеринга
+  updateSortIndicators();
 }
 
 function colorMap(votes) {
@@ -245,6 +352,7 @@ async function init() {
     
     // Сначала отображаем весь контент
     renderSelect();
+    setupTableSorting(); // Настраиваем сортировку таблицы
     renderTable(votes, isAdmin);
     setupControls(votes, isAdmin);
     
@@ -377,18 +485,35 @@ function setupControls(votes, isAdmin) {
           const payload = {};
           COUNTRIES.forEach(c => { payload[`votes/${c.code}`] = 0; });
           await firebaseApi.update(firebaseApi.ref(firebaseApi.db), payload);
+          
+          // Отдельно записываем resetTimestamp в корень
+          const resetTs = Date.now();
+          if (firebaseApi.set) {
+            await firebaseApi.set(firebaseApi.ref(firebaseApi.db, 'resetTimestamp'), resetTs);
+          } else {
+            // REST режим fallback
+            const cfg = window.FIREBASE_CONFIG || {};
+            const base = cfg.databaseURL ? cfg.databaseURL.replace(/\/$/, '') : '';
+            if (base) {
+              await fetch(`${base}/resetTimestamp.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(resetTs)
+              });
+            }
+          }
+          localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
         } catch (_) {
           // Fallback
           Object.assign(votes, resetData);
           writeVotes(votes);
+          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
         }
       } else {
         Object.assign(votes, resetData);
         writeVotes(votes);
+        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
       }
-      
-      // Сбрасываем флаги голосования для всех пользователей
-      localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
       
       renderTable(votes, isAdmin);
       colorMap(votes);
@@ -481,8 +606,27 @@ async function initFirebase(initialVotes, isAdmin) {
               }).filter(Boolean)
             ))
           });
+        },
+        set: async (ref, value) => {
+          const path = ref.path;
+          await fetch(`${base}${path}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(value)
+          });
         }
       };
+      
+      // Проверяем resetTimestamp при первой загрузке
+      const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
+      try {
+        const res = await fetch(`${base}/resetTimestamp.json`);
+        const resetTs = await res.json();
+        if (resetTs && resetTs !== lastReset) {
+          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
+        }
+      } catch (_) {}
       
       // Подписка через polling
       setInterval(async () => {
@@ -491,6 +635,16 @@ async function initFirebase(initialVotes, isAdmin) {
           const data = await res.json() || {};
           const newVotes = {};
           COUNTRIES.forEach(c => { newVotes[c.code] = Number(data[c.code] || 0); });
+          
+          // Проверяем resetTimestamp
+          const resetRes = await fetch(`${base}/resetTimestamp.json`);
+          const resetTs = await resetRes.json();
+          const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
+          if (resetTs && resetTs !== lastReset) {
+            localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+            localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
+          }
+          
           renderTable(newVotes, isAdmin);
           colorMap(newVotes);
           writeVotes(newVotes);
@@ -515,10 +669,23 @@ async function initFirebase(initialVotes, isAdmin) {
     
     // Полный SDK режим
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js');
-    const { getDatabase, ref, onValue, runTransaction, update } = await import('https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js');
+    const { getDatabase, ref, onValue, runTransaction, update, set } = await import('https://www.gstatic.com/firebasejs/10.12.1/firebase-database.js');
     const app = initializeApp(window.FIREBASE_CONFIG);
     const db = getDatabase(app);
-    firebaseApi = { db, ref, onValue, runTransaction, update };
+    firebaseApi = { db, ref, onValue, runTransaction, update, set };
+    
+    // Подписка на resetTimestamp для сброса флагов голосования
+    const resetRef = ref(db, 'resetTimestamp');
+    onValue(resetRef, (snap) => {
+      const resetTs = snap.val();
+      if (resetTs) {
+        const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
+        if (resetTs !== lastReset) {
+          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
+        }
+      }
+    });
     
     // Подписка на изменения в реальном времени
     const root = ref(db, 'votes');
@@ -541,6 +708,19 @@ async function initFirebase(initialVotes, isAdmin) {
     renderTable(newVotes, isAdmin);
     colorMap(newVotes);
     writeVotes(newVotes);
+    
+    // Проверяем resetTimestamp при первой загрузке
+    const resetSnap = await new Promise((resolve) => {
+      onValue(resetRef, resolve, { onlyOnce: true });
+    });
+    const resetTs = resetSnap.val();
+    if (resetTs) {
+      const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
+      if (resetTs !== lastReset) {
+        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+        localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
+      }
+    }
     
   } catch (err) {
     console.error('Firebase init error:', err);
