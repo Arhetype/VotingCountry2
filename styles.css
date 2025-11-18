@@ -179,3 +179,16 @@ body:not(.authenticated) .layout {
 body:not(.admin) #resetBtn {
   display: none;
 }
+
+/* Стили для кнопки выхода администратора */
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.controls button.ghost:last-child {
+  margin-left: auto; /* Перемещает кнопку выхода вправо */
+}
