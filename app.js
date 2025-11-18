@@ -83,6 +83,10 @@ function addUserVotedCountry(countryCode) {
   }
 }
 
+function clearUserVotedCountries() {
+  localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+}
+
 function computeStats(votes) {
   const counts = COUNTRIES.map(c => votes[c.code] || 0);
   const total = counts.reduce((a, b) => a + b, 0);
@@ -507,12 +511,12 @@ function setupControls(votes, isAdmin) {
           // Fallback
           Object.assign(votes, resetData);
           writeVotes(votes);
-          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          clearUserVotedCountries();
         }
       } else {
         Object.assign(votes, resetData);
         writeVotes(votes);
-        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+        clearUserVotedCountries();
       }
       
       renderTable(votes, isAdmin);
@@ -526,7 +530,7 @@ function setupControls(votes, isAdmin) {
     logoutBtn.className = "ghost";
     logoutBtn.textContent = "Выйти";
     logoutBtn.title = "Выйти из режима администратора";
-    logoutBtn.style.marginLeft = "8px";
+    logoutBtn.style.marginLeft = "auto"; // Перемещаем кнопку вправо
     
     logoutBtn.addEventListener("click", function() {
       if (confirm("Выйти из режима администратора?")) {
@@ -623,7 +627,7 @@ async function initFirebase(initialVotes, isAdmin) {
         const res = await fetch(`${base}/resetTimestamp.json`);
         const resetTs = await res.json();
         if (resetTs && resetTs !== lastReset) {
-          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          clearUserVotedCountries();
           localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
         }
       } catch (_) {}
@@ -641,7 +645,7 @@ async function initFirebase(initialVotes, isAdmin) {
           const resetTs = await resetRes.json();
           const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
           if (resetTs && resetTs !== lastReset) {
-            localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+            clearUserVotedCountries();
             localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
           }
           
@@ -681,7 +685,7 @@ async function initFirebase(initialVotes, isAdmin) {
       if (resetTs) {
         const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
         if (resetTs !== lastReset) {
-          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          clearUserVotedCountries();
           localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
         }
       }
@@ -717,7 +721,7 @@ async function initFirebase(initialVotes, isAdmin) {
     if (resetTs) {
       const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
       if (resetTs !== lastReset) {
-        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+        clearUserVotedCountries();
         localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
       }
     }
