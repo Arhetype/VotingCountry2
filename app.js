@@ -3,7 +3,7 @@ const COUNTRIES = [
   { code: "BLR", name: "Беларусь" },
   { code: "KAZ", name: "Казахстан" },
   { code: "UZB", name: "Узбекистан" },
-  { code: "KGZ", name: "Киргизстан" },
+  { code: "KGZ", name: "Кыргызстан" },
   { code: "UKR", name: "Украина" },
   { code: "GBR", name: "Великобритания" },
   { code: "SWE", name: "Швеция" },
@@ -85,6 +85,9 @@ function addUserVotedCountry(countryCode) {
 }
 
 function updateUIAfterReset() {
+  // Сначала очищаем данные о голосовании пользователя
+  localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+  
   // Обновляем таблицу
   const votes = readVotes();
   renderTable(votes, currentIsAdmin);
@@ -92,31 +95,42 @@ function updateUIAfterReset() {
   // Обновляем кнопки голосования
   const voteBtn = document.getElementById("voteBtn");
   const select = document.getElementById("countrySelect");
-  if (voteBtn && select && !currentIsAdmin) {
-    const code = select.value;
-    if (hasUserVotedForCountry(code)) {
-      voteBtn.disabled = true;
-      voteBtn.textContent = "Вы уже проголосовали за эту страну";
-    } else {
+  if (voteBtn && select) {
+    if (currentIsAdmin) {
+      // Для админа всегда доступно
       voteBtn.disabled = false;
       voteBtn.textContent = "Голосовать";
+    } else {
+      // Для обычных пользователей проверяем после очистки
+      const code = select.value;
+      const voted = getUserVotedCountries(); // Должен вернуть пустой массив после очистки
+      if (voted.includes(code)) {
+        voteBtn.disabled = true;
+        voteBtn.textContent = "Вы уже проголосовали за эту страну";
+      } else {
+        voteBtn.disabled = false;
+        voteBtn.textContent = "Голосовать";
+      }
     }
   }
   
   // Обновляем все кнопки +1 в таблице
   const tableBtns = document.querySelectorAll('#countriesTableBody button.small');
+  const voted = getUserVotedCountries(); // Должен вернуть пустой массив после очистки
   tableBtns.forEach(btn => {
     const tr = btn.closest('tr');
     if (tr) {
       const countryName = tr.querySelector('td:first-child')?.textContent;
       if (countryName) {
         const country = COUNTRIES.find(c => c.name === countryName);
-        if (country && hasUserVotedForCountry(country.code) && !currentIsAdmin) {
-          btn.disabled = true;
-          btn.textContent = "✓";
-        } else if (country && !hasUserVotedForCountry(country.code)) {
-          btn.disabled = false;
-          btn.textContent = "+1";
+        if (country) {
+          if (voted.includes(country.code) && !currentIsAdmin) {
+            btn.disabled = true;
+            btn.textContent = "✓";
+          } else {
+            btn.disabled = false;
+            btn.textContent = "+1";
+          }
         }
       }
     }
@@ -377,12 +391,40 @@ function checkAuth() {
   return isAdmin;
 }
 
+async function checkResetTimestamp() {
+  // Проверяем resetTimestamp из Firebase при инициализации
+  if (!window.FIREBASE_CONFIG) return;
+  
+  try {
+    const cfg = window.FIREBASE_CONFIG || {};
+    const base = cfg.databaseURL ? cfg.databaseURL.replace(/\/$/, '') : '';
+    if (!base) return;
+    
+    const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
+    const res = await fetch(`${base}/resetTimestamp.json`);
+    if (res.ok) {
+      const resetTs = await res.json();
+      if (resetTs !== null && resetTs !== undefined && String(resetTs) !== String(lastReset)) {
+        // Обнаружен новый сброс - очищаем данные пользователя
+        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+        localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, String(resetTs));
+        updateUIAfterReset();
+      }
+    }
+  } catch (_) {
+    // Игнорируем ошибки при проверке
+  }
+}
+
 async function init() {
   try {
     const isAdmin = checkAuth();
     if (isAdmin === undefined) return; // Перенаправление произошло
     
     currentIsAdmin = isAdmin; // Сохраняем статус админа для доступа из функций Firebase
+    
+    // Проверяем resetTimestamp перед отображением контента
+    await checkResetTimestamp();
     
     let votes = readVotes();
     
@@ -545,27 +587,26 @@ function setupControls(votes, isAdmin) {
             }
           }
           localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
-          // Локально тоже сбрасываем флаги (для админа)
-          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
+          // Обновляем локальные votes после успешного обновления Firebase
+          Object.assign(votes, resetData);
+          writeVotes(votes);
         } catch (_) {
           // Fallback
           Object.assign(votes, resetData);
           writeVotes(votes);
-          localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
           const resetTs = Date.now();
           localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
         }
       } else {
         Object.assign(votes, resetData);
         writeVotes(votes);
-        localStorage.removeItem(USER_VOTED_COUNTRIES_KEY);
         const resetTs = Date.now();
         localStorage.setItem(LAST_RESET_TIMESTAMP_KEY, resetTs);
       }
       
-      renderTable(votes, isAdmin);
+      // updateUIAfterReset() обновит таблицу и все кнопки, включая очистку USER_VOTED_COUNTRIES_KEY
+      updateUIAfterReset();
       colorMap(votes);
-      updateUIAfterReset(); // Обновляем UI после сброса
       alert("Голоса сброшены! Все пользователи могут голосовать заново.");
     });
   }
