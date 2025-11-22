@@ -345,6 +345,58 @@ function renderTable(votes, isAdmin = false) {
   updateSortIndicators();
 }
 
+// Функция для интерполяции между двумя цветами в RGB
+function interpolateColor(color1, color2, factor) {
+  // Преобразуем hex в RGB
+  const hex1 = color1.replace('#', '');
+  const hex2 = color2.replace('#', '');
+  const r1 = parseInt(hex1.substr(0, 2), 16);
+  const g1 = parseInt(hex1.substr(2, 2), 16);
+  const b1 = parseInt(hex1.substr(4, 2), 16);
+  const r2 = parseInt(hex2.substr(0, 2), 16);
+  const g2 = parseInt(hex2.substr(2, 2), 16);
+  const b2 = parseInt(hex2.substr(4, 2), 16);
+  
+  const r = Math.round(r1 + (r2 - r1) * factor);
+  const g = Math.round(g1 + (g2 - g1) * factor);
+  const b = Math.round(b1 + (b2 - b1) * factor);
+  
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Функция для получения цвета на основе количества голосов (градиент как пробки в картах)
+function getGradientColor(votes, minPositive, max) {
+  if (votes === 0) {
+    return "#374151"; // Серый для стран без голосов
+  }
+  
+  if (max === null || minPositive === null || max === minPositive) {
+    // Если все значения одинаковые или нет данных
+    return "#f59e0b"; // Желтый по умолчанию
+  }
+  
+  // Нормализуем значение от 0 до 1 (где 0 = minPositive, 1 = max)
+  const normalized = (votes - minPositive) / (max - minPositive);
+  
+  // Градиент цветов как в пробках карт (инвертированный):
+  // Бордовый -> Темно-красный -> Красный -> Оранжевый -> Желтый
+  const colors = [
+    "#991b1b",  // Бордовый (начало - минимум)
+    "#dc2626",  // Темно-красный
+    "#ef4444",  // Красный
+    "#f97316",  // Оранжевый
+    "#f59e0b",  // Желто-оранжевый
+    "#fbbf24"   // Желтый (конец - максимум)
+  ];
+  
+  // Определяем, между какими цветами интерполировать
+  const segmentSize = 1 / (colors.length - 1);
+  const segmentIndex = Math.min(Math.floor(normalized / segmentSize), colors.length - 2);
+  const localFactor = (normalized - segmentIndex * segmentSize) / segmentSize;
+  
+  return interpolateColor(colors[segmentIndex], colors[segmentIndex + 1], localFactor);
+}
+
 function colorMap(votes) {
   const svgRoot = document.getElementById("worldMapSvg");
   if (!svgRoot) return;
@@ -361,16 +413,18 @@ function colorMap(votes) {
     if (!el) return;
     
     const v = votes[c.code] || 0;
-    let fill = "#374151";
+    let fill = "#374151"; // Базовый серый цвет
+    
     if (v > 0) {
+      // Топовая страна (максимум) всегда зеленая
       if (max !== null && v === max) {
-        fill = "#22c55e";
-      } else if (minPositive !== null && v === minPositive) {
-        fill = "#f43f5e";
+        fill = "#22c55e"; // Зеленый для топовой страны
       } else {
-        fill = "#f59e0b";
+        // Остальные страны получают градиентный цвет
+        fill = getGradientColor(v, minPositive, max);
       }
     }
+    
     el.style.fill = fill;
   });
 }
@@ -659,8 +713,8 @@ function setupControls(votes, isAdmin) {
     logoutBtn.className = "ghost";
     logoutBtn.textContent = "Выйти";
     logoutBtn.title = "Выйти из режима администратора";
-    logoutBtn.style.marginLeft = "auto"; // Прижимаем к правому краю
     logoutBtn.style.flexShrink = "0"; // Не даем сжиматься
+    logoutBtn.style.whiteSpace = "nowrap"; // Не переносим текст
     
     logoutBtn.addEventListener("click", function() {
       if (confirm("Выйти из режима администратора?")) {
@@ -672,6 +726,11 @@ function setupControls(votes, isAdmin) {
     // Добавляем кнопку в controls
     const controls = document.querySelector(".controls");
     if (controls) {
+      // Добавляем спейсер перед кнопкой выхода, чтобы прижать её к правому краю
+      const spacer = document.createElement("div");
+      spacer.style.flex = "1";
+      spacer.style.minWidth = "8px"; // Минимальная ширина для gap
+      controls.appendChild(spacer);
       controls.appendChild(logoutBtn);
     }
   }
