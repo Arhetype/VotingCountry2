@@ -72,11 +72,68 @@ button:hover { filter: brightness(1.06); }
 .dot.grey { background: var(--grey); }
 
 .list { height: calc(100% - 140px); overflow: auto; }
-table { width: 100%; border-collapse: collapse; }
+table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  table-layout: auto; /* Динамическая таблица как в Excel */
+}
 thead { position: sticky; top: 0; background: #141722; }
-th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
-th.num, td.num { text-align: right; }
+th, td { 
+  padding: 10px 12px; 
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap; /* Предотвращаем перенос текста */
+}
+
+/* Колонка "Страна" - узкая, выравнивание по левому краю */
+th.country-name, td.country-name {
+  text-align: left;
+  min-width: 100px; /* Минимальная ширина */
+  max-width: 150px; /* Максимальная ширина для компактности */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Числовые колонки - выравнивание по правому краю */
+th.num, td.num {
+  text-align: right;
+  min-width: 70px; /* Минимальная ширина для чисел */
+  padding-left: 16px; /* Больше отступ слева для лучшей читаемости */
+  padding-right: 16px;
+}
+
+/* Колонка с кнопками - по центру */
+th.buttons-header, td.buttons-cell {
+  text-align: center;
+  min-width: 120px; /* Минимальная ширина для кнопок */
+  width: auto; /* Автоматическая ширина по содержимому */
+}
+
 td button.small { height: 28px; padding: 0 8px; }
+
+/* Стили для ячейки с кнопками */
+.buttons-cell {
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.buttons-container {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+
+.buttons-container button.small {
+  flex: 0 0 auto;
+  min-width: fit-content;
+  white-space: nowrap;
+}
+
+.buttons-container .unknown-btn {
+  font-size: 12px;
+  padding: 0 10px;
+}
 
 .map-wrap { height: 100%; width: 100%; display: grid; place-items: center; background: #111319; }
 #worldMapSvg { width: 100%; height: 100%; border: none; }
@@ -103,12 +160,47 @@ td button.small { height: 28px; padding: 0 8px; }
   .controls { flex-wrap: wrap; }
   select, button { flex: 1 1 auto; }
   .list { height: auto; max-height: 50vh; }
+  
+  /* Адаптивные стили для таблицы */
+  th.country-name, td.country-name {
+    max-width: 120px; /* Еще меньше на мобильных */
+  }
+  th.num, td.num {
+    min-width: 60px;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  th.buttons-header, td.buttons-cell {
+    min-width: 100px;
+  }
+  
+  /* Адаптивные стили для кнопок в таблице */
+  .buttons-container {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .buttons-container button.small {
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
   .app-header h1 { font-size: 18px; }
   button, select { height: 42px; }
   td button.small { height: 34px; }
+  
+  /* На очень маленьких экранах кнопки в таблице могут быть в одну колонку */
+  .buttons-container {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .buttons-container button.small {
+    width: 100%;
+    font-size: 11px;
+    padding: 0 6px;
+  }
 }
 
 

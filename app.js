@@ -73,13 +73,27 @@ function getUserVotedCountries() {
 
 function hasUserVotedForCountry(countryCode) {
   const voted = getUserVotedCountries();
-  return voted.includes(countryCode);
+  return voted.includes(countryCode) || voted.includes(`${countryCode}_unknown`);
 }
 
 function addUserVotedCountry(countryCode) {
   const voted = getUserVotedCountries();
   if (!voted.includes(countryCode)) {
     voted.push(countryCode);
+    localStorage.setItem(USER_VOTED_COUNTRIES_KEY, JSON.stringify(voted));
+  }
+}
+
+function hasUserVotedUnknown(countryCode) {
+  const voted = getUserVotedCountries();
+  return voted.includes(`${countryCode}_unknown`);
+}
+
+function addUserVotedUnknown(countryCode) {
+  const voted = getUserVotedCountries();
+  const key = `${countryCode}_unknown`;
+  if (!voted.includes(key)) {
+    voted.push(key);
     localStorage.setItem(USER_VOTED_COUNTRIES_KEY, JSON.stringify(voted));
   }
 }
@@ -145,12 +159,16 @@ function updateUIAfterReset() {
 
 function computeStats(votes) {
   const counts = COUNTRIES.map(c => votes[c.code] || 0);
-  const total = counts.reduce((a, b) => a + b, 0);
+  // Для процентов считаем только голоса за страну (без "не знаю")
+  const totalForPercent = counts.reduce((a, b) => a + b, 0);
+  // Общее количество голосов включая "не знаю" для счетчика
+  const unknownCounts = COUNTRIES.map(c => votes[`${c.code}_unknown`] || 0);
+  const total = totalForPercent + unknownCounts.reduce((a, b) => a + b, 0);
   const positives = counts.filter(v => v > 0);
   const allZero = positives.length === 0;
   const max = allZero ? null : Math.max(...counts);
   const minPositive = allZero ? null : Math.min(...positives);
-  return { total, max, minPositive };
+  return { total, totalForPercent, max, minPositive };
 }
 
 function percent(part, total) {
@@ -182,7 +200,7 @@ function setupTableSorting() {
   const headers = thead.querySelectorAll('th');
   headers.forEach((th, index) => {
     let text = th.textContent.trim().replace(/[↑↓]/g, '').trim();
-    if (text === '%' || text === 'Голоса' || text === 'Страна') {
+    if (text === '%' || text === 'Голоса' || text === 'Страна' || text === 'Не знаю') {
       th.style.cursor = 'pointer';
       th.style.userSelect = 'none';
       th.title = 'Нажмите для сортировки';
@@ -199,6 +217,7 @@ function setupTableSorting() {
         if (text === '%') column = 'percent';
         else if (text === 'Голоса') column = 'votes';
         else if (text === 'Страна') column = 'name';
+        else if (text === 'Не знаю') column = 'unknown';
         
         if (column) {
           // Переключаем порядок сортировки, если кликнули по той же колонке
@@ -234,6 +253,7 @@ function updateSortIndicators() {
       if (text === '%') column = 'percent';
       else if (text === 'Голоса') column = 'votes';
       else if (text === 'Страна') column = 'name';
+      else if (text === 'Не знаю') column = 'unknown';
       
       if (column && tableSortOrder.column === column) {
         indicator.textContent = tableSortOrder.ascending ? '↑' : '↓';
@@ -249,14 +269,16 @@ function updateSortIndicators() {
 function renderTable(votes, isAdmin = false) {
   const tbody = document.getElementById("countriesTableBody");
   tbody.innerHTML = "";
-  const { total, max, minPositive } = computeStats(votes);
+  const { total, totalForPercent, max, minPositive } = computeStats(votes);
   document.getElementById("totalVotes").textContent = `Всего голосов: ${total}`;
 
   // Подготавливаем данные для сортировки
   const countriesData = COUNTRIES.map(c => {
     const v = votes[c.code] || 0;
-    const pct = percent(v, total);
-    return { ...c, votes: v, percent: pct };
+    const unknownVotes = votes[`${c.code}_unknown`] || 0;
+    // Процент считаем только от голосов за страну (без "не знаю")
+    const pct = percent(v, totalForPercent);
+    return { ...c, votes: v, unknownVotes, percent: pct };
   });
 
   // Сортировка
@@ -275,6 +297,11 @@ function renderTable(votes, isAdmin = false) {
       const diff = a.name.localeCompare(b.name);
       return tableSortOrder.ascending ? diff : -diff;
     });
+  } else if (tableSortOrder.column === 'unknown') {
+    countriesData.sort((a, b) => {
+      const diff = a.unknownVotes - b.unknownVotes;
+      return tableSortOrder.ascending ? diff : -diff;
+    });
   }
 
   countriesData.forEach(c => {
@@ -283,6 +310,7 @@ function renderTable(votes, isAdmin = false) {
     const pct = c.percent;
 
     const tdName = document.createElement("td");
+    tdName.className = "country-name";
     tdName.textContent = c.name;
 
     const tdVotes = document.createElement("td");
@@ -291,21 +319,39 @@ function renderTable(votes, isAdmin = false) {
 
     const tdPct = document.createElement("td");
     tdPct.className = "num";
-    tdPct.textContent = `${pct}%`;
+    tdPct.textContent = `${c.percent}%`;
+
+    const tdUnknown = document.createElement("td");
+    tdUnknown.className = "num";
+    tdUnknown.textContent = c.unknownVotes.toString();
 
     const tdBtn = document.createElement("td");
+    tdBtn.className = "buttons-cell"; // Добавляем класс для стилизации
+    
+    // Контейнер для кнопок
+    const buttonsContainer = document.createElement("div");
+    buttonsContainer.className = "buttons-container";
+    
+    // Кнопка "+1"
     const btn = document.createElement("button");
     btn.className = "small";
     btn.textContent = "+1";
     
-    // Блокируем кнопку если пользователь уже голосовал за эту страну
-    if (hasUserVotedForCountry(c.code) && !isAdmin) {
+    const hasVoted = hasUserVotedForCountry(c.code);
+    const hasVotedUnknown = hasUserVotedUnknown(c.code);
+    
+    // Блокируем кнопку если пользователь уже голосовал за эту страну или выбрал "не знаю"
+    if ((hasVoted || hasVotedUnknown) && !isAdmin) {
       btn.disabled = true;
-      btn.textContent = "✓";
+      if (hasVoted) {
+        btn.textContent = "✓";
+      } else {
+        btn.textContent = "+1";
+      }
     }
     
     btn.addEventListener("click", async () => {
-      if (hasUserVotedForCountry(c.code) && !isAdmin) return;
+      if ((hasVoted || hasVotedUnknown) && !isAdmin) return;
       
       const newValue = (votes[c.code] || 0) + 1;
       votes[c.code] = newValue;
@@ -333,10 +379,58 @@ function renderTable(votes, isAdmin = false) {
       colorMap(votes);
     });
     
-    tdBtn.appendChild(btn);
+    // Кнопка "не знаю"
+    const btnUnknown = document.createElement("button");
+    btnUnknown.className = "small unknown-btn";
+    btnUnknown.textContent = "?";
+    
+    // Блокируем кнопку если пользователь уже голосовал за эту страну или выбрал "не знаю"
+    if ((hasVoted || hasVotedUnknown) && !isAdmin) {
+      btnUnknown.disabled = true;
+      if (hasVotedUnknown) {
+        btnUnknown.textContent = "✓";
+      } else {
+        btnUnknown.textContent = "?";
+      }
+    }
+    
+    btnUnknown.addEventListener("click", async () => {
+      if ((hasVoted || hasVotedUnknown) && !isAdmin) return;
+      
+      const unknownKey = `${c.code}_unknown`;
+      const newValue = (votes[unknownKey] || 0) + 1;
+      votes[unknownKey] = newValue;
+      
+      // Синхронизация с Firebase
+      if (firebaseApi) {
+        try {
+          if (firebaseApi.runTransaction && firebaseApi.ref) {
+            await firebaseApi.runTransaction(firebaseApi.ref(firebaseApi.db, `votes/${unknownKey}`), current => (Number(current) || 0) + 1);
+          }
+        } catch (_) {
+          // Fallback на localStorage
+          writeVotes(votes);
+        }
+      } else {
+        writeVotes(votes);
+      }
+      
+      // Помечаем что пользователь выбрал "не знаю" (только для обычных пользователей)
+      if (!isAdmin) {
+        addUserVotedUnknown(c.code);
+      }
+      
+      renderTable(votes, isAdmin);
+      colorMap(votes);
+    });
+    
+    buttonsContainer.appendChild(btn);
+    buttonsContainer.appendChild(btnUnknown);
+    tdBtn.appendChild(buttonsContainer);
     tr.appendChild(tdName);
     tr.appendChild(tdVotes);
     tr.appendChild(tdPct);
+    tr.appendChild(tdUnknown);
     tr.appendChild(tdBtn);
     tbody.appendChild(tr);
   });
@@ -478,7 +572,10 @@ async function checkResetTimestamp() {
         if (votesRes.ok) {
           const votesData = await votesRes.json() || {};
           const newVotes = {};
-          COUNTRIES.forEach(c => { newVotes[c.code] = Number(votesData[c.code] || 0); });
+          COUNTRIES.forEach(c => { 
+            newVotes[c.code] = Number(votesData[c.code] || 0);
+            newVotes[`${c.code}_unknown`] = Number(votesData[`${c.code}_unknown`] || 0);
+          });
           writeVotes(newVotes);
         }
         
@@ -588,7 +685,9 @@ function setupControls(votes, isAdmin) {
   // Обновляем состояние кнопки при изменении выбора
   function updateVoteButton() {
     const code = select.value;
-    if (hasUserVotedForCountry(code) && !isAdmin) {
+    const hasVoted = hasUserVotedForCountry(code);
+    const hasVotedUnknown = hasUserVotedUnknown(code);
+    if ((hasVoted || hasVotedUnknown) && !isAdmin) {
       voteBtn.disabled = true;
       voteBtn.textContent = "Вы уже проголосовали за эту страну";
     } else {
@@ -602,7 +701,9 @@ function setupControls(votes, isAdmin) {
 
   voteBtn.addEventListener("click", async () => {
     const code = select.value;
-    if (hasUserVotedForCountry(code) && !isAdmin) return;
+    const hasVoted = hasUserVotedForCountry(code);
+    const hasVotedUnknown = hasUserVotedUnknown(code);
+    if ((hasVoted || hasVotedUnknown) && !isAdmin) return;
     
     const newValue = (votes[code] || 0) + 1;
     votes[code] = newValue;
@@ -635,7 +736,10 @@ function setupControls(votes, isAdmin) {
       if (!confirm("Сбросить все голоса? Это действие нельзя отменить.")) return;
       
       const resetData = {};
-      COUNTRIES.forEach(c => { resetData[c.code] = 0; });
+      COUNTRIES.forEach(c => { 
+        resetData[c.code] = 0;
+        resetData[`${c.code}_unknown`] = 0;
+      });
       
       // Полная очистка Firebase и синхронизация
       if (firebaseApi && firebaseApi.ref) {
@@ -652,7 +756,10 @@ function setupControls(votes, isAdmin) {
             
             // Создаем новый пустой объект votes с нулевыми значениями
             const votesPayload = {};
-            COUNTRIES.forEach(c => { votesPayload[c.code] = 0; });
+            COUNTRIES.forEach(c => { 
+              votesPayload[c.code] = 0;
+              votesPayload[`${c.code}_unknown`] = 0;
+            });
             await fetch(`${base}/votes.json`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -661,7 +768,10 @@ function setupControls(votes, isAdmin) {
           } else if (firebaseApi.update && firebaseApi.set) {
             // Используем SDK методы
             const payload = {};
-            COUNTRIES.forEach(c => { payload[`votes/${c.code}`] = 0; });
+            COUNTRIES.forEach(c => { 
+              payload[`votes/${c.code}`] = 0;
+              payload[`votes/${c.code}_unknown`] = 0;
+            });
             await firebaseApi.update(firebaseApi.ref(firebaseApi.db), payload);
           }
           
@@ -833,7 +943,10 @@ async function initFirebase(initialVotes, isAdmin) {
             if (votesRes.ok) {
               const votesData = await votesRes.json() || {};
               const newVotes = {};
-              COUNTRIES.forEach(c => { newVotes[c.code] = Number(votesData[c.code] || 0); });
+              COUNTRIES.forEach(c => { 
+                newVotes[c.code] = Number(votesData[c.code] || 0);
+                newVotes[`${c.code}_unknown`] = Number(votesData[`${c.code}_unknown`] || 0);
+              });
               writeVotes(newVotes);
             }
             
@@ -863,7 +976,10 @@ async function initFirebase(initialVotes, isAdmin) {
           const res = await fetch(`${base}/votes.json`);
           const data = await res.json() || {};
           const newVotes = {};
-          COUNTRIES.forEach(c => { newVotes[c.code] = Number(data[c.code] || 0); });
+          COUNTRIES.forEach(c => { 
+            newVotes[c.code] = Number(data[c.code] || 0);
+            newVotes[`${c.code}_unknown`] = Number(data[`${c.code}_unknown`] || 0);
+          });
           
           // Если был обнаружен сброс, обновляем UI после загрузки votes
           if (resetDetected) {
@@ -883,7 +999,10 @@ async function initFirebase(initialVotes, isAdmin) {
         const data = await res.json();
         if (data && Object.keys(data).length > 0) {
           const newVotes = {};
-          COUNTRIES.forEach(c => { newVotes[c.code] = Number(data[c.code] || 0); });
+          COUNTRIES.forEach(c => { 
+            newVotes[c.code] = Number(data[c.code] || 0);
+            newVotes[`${c.code}_unknown`] = Number(data[`${c.code}_unknown`] || 0);
+          });
           renderTable(newVotes, isAdmin);
           colorMap(newVotes);
           writeVotes(newVotes);
@@ -922,7 +1041,10 @@ async function initFirebase(initialVotes, isAdmin) {
     onValue(root, (snap) => {
       const data = snap.val() || {};
       const newVotes = {};
-      COUNTRIES.forEach(c => { newVotes[c.code] = Number(data[c.code] || 0); });
+      COUNTRIES.forEach(c => { 
+        newVotes[c.code] = Number(data[c.code] || 0);
+        newVotes[`${c.code}_unknown`] = Number(data[`${c.code}_unknown`] || 0);
+      });
       
       // Проверяем, был ли обнаружен новый сброс
       const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
@@ -955,7 +1077,10 @@ async function initFirebase(initialVotes, isAdmin) {
     
     const data = snap.val() || {};
     const newVotes = {};
-    COUNTRIES.forEach(c => { newVotes[c.code] = Number(data[c.code] || 0); });
+    COUNTRIES.forEach(c => { 
+      newVotes[c.code] = Number(data[c.code] || 0);
+      newVotes[`${c.code}_unknown`] = Number(data[`${c.code}_unknown`] || 0);
+    });
     
     const resetTs = resetSnap.val();
     const lastReset = localStorage.getItem(LAST_RESET_TIMESTAMP_KEY);
